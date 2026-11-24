@@ -1,0 +1,70 @@
+name: Hex Preview APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch or commit in fpanizza1/hex to build
+        required: false
+        default: dev
+      build_number:
+        description: Preview build number (version code)
+        required: false
+        default: "1"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Check out the fork
+        uses: actions/checkout@v4
+        with:
+          repository: fpanizza1/hex
+          ref: ${{ inputs.ref }}
+          fetch-depth: 1
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up the Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK packages
+        run: |
+          sdkmanager --install "platform-tools" "platforms;android-36" "build-tools;36.0.0" "cmake;3.22.1" "ndk;27.2.12479018"
+
+      - name: Write the preview keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.HEX_PREVIEW_KEYSTORE_B64 }}
+          STORE_PASSWORD: ${{ secrets.HEX_PREVIEW_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.HEX_PREVIEW_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/hex-key"
+          printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/hex-key/hex-preview.jks"
+          printf 'storeFile=hex-preview.jks\nstorePassword=%s\nkeyAlias=hexpreview\nkeyPassword=%s\n' \
+            "$STORE_PASSWORD" "$KEY_PASSWORD" > "$RUNNER_TEMP/hex-key/keystore.properties"
+          echo "HEX_ANDROID_PREVIEW_KEYSTORE_PROPERTIES=$RUNNER_TEMP/hex-key/keystore.properties" >> "$GITHUB_ENV"
+
+      - name: Unit tests
+        working-directory: android
+        run: ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace
+
+      - name: Build the preview APK
+        working-directory: android
+        run: ./gradlew :app:assemblePreview -PhexPreviewBuild=${{ inputs.build_number }} --no-daemon --stacktrace
+
+      - name: Upload the APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: hex-preview-apk
+          path: android/app/build/outputs/apk/preview/*.apk
+          if-no-files-found: error
+          retention-days: 14
