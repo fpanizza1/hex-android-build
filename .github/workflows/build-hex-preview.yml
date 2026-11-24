@@ -35,7 +35,7 @@ jobs:
 
       - name: Install the Android SDK
         run: |
-          set -euo pipefail
+          set -eu
           SDK="$HOME/android-sdk"
           mkdir -p "$SDK/cmdline-tools"
           curl -sSL -o /tmp/cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip
@@ -47,7 +47,7 @@ jobs:
             echo "SDK=$SDK"
           } >> "$GITHUB_ENV"
           echo "$SDK/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
 
       - name: Install SDK packages
         run: |
@@ -59,7 +59,7 @@ jobs:
           STORE_PASSWORD: ${{ secrets.HEX_PREVIEW_STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.HEX_PREVIEW_KEY_PASSWORD }}
         run: |
-          set -euo pipefail
+          set -eu
           mkdir -p "$RUNNER_TEMP/hex-key"
           printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/hex-key/hex-preview.jks"
           printf 'storeFile=hex-preview.jks\nstorePassword=%s\nkeyAlias=hexpreview\nkeyPassword=%s\n' \
